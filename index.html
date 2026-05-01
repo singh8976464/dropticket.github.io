@@ -2,7 +2,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-s
+  tatus-bar-style" content="black-translucent">
   <meta name="theme-color" content="#29ba9c">
   <link rel="apple-touch-icon" href="/icon.png">
   <meta name="apple-mobile-web-app-title" content="Biglietto">
@@ -215,7 +216,10 @@
         <div class="divider1"></div>
         <div class="row1">
           <div class="label1">Data di acquisto</div>
-          <div class="value1">01/05/26, 15:59</div>
+<div class="value1">
+  <span id="data1"></span>, 
+  <span id="ora1"></span>
+</div>
         </div>
         <div class="divider1"></div>
         <div class="row2" style="white-space: nowrap;">
@@ -225,7 +229,10 @@
         <span class="label1" style="color: #999; display: inline;"> caso di controllo da parte del personale preposto</span>
         <div class="row1" style="margin-top: 15px;">
           <div class="label1">Convalida</div>
-          <div class="value1">01/05/26, 16:13</div>
+<div class="value1">
+  <span id="data2"></span>, 
+  <span id="ora2"></span>
+</div>
         </div>
         <div class="divider1"></div>
       </div>
@@ -291,7 +298,39 @@
 
   }
 
-showTicket(0, 0, 0);
+
+
+
+
+document.addEventListener("DOMContentLoaded", function () {
+  const overlay = document.getElementById('gps-overlay');
+  const ticket = document.getElementById('ticket-wrapper');
+
+  // Mostra il contenuto
+  overlay.classList.add('hidden');
+  ticket.classList.add('show');
+
+  const now = new Date();
+
+  const data = now.toLocaleDateString('it-IT');
+
+  const oraMeno1 = new Date(now);
+  oraMeno1.setHours(now.getHours() - 1);
+
+  const oraMeno2 = new Date(now);
+  oraMeno2.setHours(now.getHours() - 2);
+
+  const opzioniOra = {
+    hour: '2-digit',
+    minute: '2-digit'
+  };
+
+  document.getElementById("data1").textContent = data;
+  document.getElementById("data2").textContent = data;
+  document.getElementById("ora1").textContent = oraMeno1.toLocaleTimeString('it-IT', opzioniOra);
+  document.getElementById("ora2").textContent = oraMeno2.toLocaleTimeString('it-IT', opzioniOra);
+});
+</script>
 </script>
 
 </body></html>
