@@ -1,0 +1,336 @@
+<html lang="it"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-s
+  tatus-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#29ba9c">
+  <link rel="apple-touch-icon" href="/icon.png">
+  <meta name="apple-mobile-web-app-title" content="Biglietto">
+  <title>Biglietto</title>
+  <style>
+    /* ── RESET & BASE ── */
+    *, *::before, *::after { box-sizing: border-box; }
+    body, html {
+      font-family: Arial, sans-serif;
+      background-color: #29ba9c;
+      margin: 0; padding: 0;
+      height: 100vh; width: 100%;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+    body {
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+    }
+
+    /* ── OVERLAY GPS ── */
+    #gps-overlay {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(160deg, #0a2a22 0%, #0d1f1a 100%);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 24px;
+      text-align: center;
+    }
+    #gps-overlay.hidden { display: none; }
+
+    .gps-icon {
+      width: 80px; height: 80px;
+      background: rgba(41,186,156,0.12);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 24px;
+      border: 1px solid rgba(41,186,156,0.3);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(41,186,156,0.3); }
+      50%      { box-shadow: 0 0 0 16px rgba(41,186,156,0); }
+    }
+    .gps-icon svg { width: 36px; height: 36px; fill: #29ba9c; }
+
+    #gps-overlay h2 {
+      font-size: 20px; font-weight: 700;
+      color: #ffffff; margin: 0 0 12px;
+      line-height: 1.3;
+    }
+    #gps-overlay p {
+      font-size: 14px; color: rgba(255,255,255,0.55);
+      margin: 0 0 32px; line-height: 1.6;
+      max-width: 300px;
+    }
+    #gps-overlay .btn-allow {
+      background: #29ba9c;
+      color: #000;
+      font-weight: 700;
+      font-size: 15px;
+      border: none;
+      border-radius: 12px;
+      padding: 14px 36px;
+      cursor: pointer;
+      width: 100%;
+      max-width: 280px;
+      transition: opacity 0.2s;
+    }
+    #gps-overlay .btn-allow:active { opacity: 0.8; }
+
+    #gps-error {
+      display: none;
+      margin-top: 16px;
+      font-size: 13px;
+      color: #f87171;
+      background: rgba(248,113,113,0.1);
+      border: 1px solid rgba(248,113,113,0.3);
+      border-radius: 8px;
+      padding: 10px 16px;
+      max-width: 300px;
+    }
+    #gps-waiting {
+      display: none;
+      margin-top: 20px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.5);
+      align-items: center;
+      gap: 8px;
+    }
+    #gps-waiting.show { display: flex; }
+    .mini-spin {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: #29ba9c;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── BIGLIETTO (nascosto finché GPS non è ok) ── */
+    #ticket-wrapper {
+      display: none;
+      flex-direction: column;
+      height: 100%;
+      width: 100%;
+    }
+    #ticket-wrapper.show { display: flex; }
+
+    .header-image {
+      display: flex; justify-content: center;
+      background-color: #29ba9c;
+      width: 100%; flex-shrink: 0;
+    }
+    .header-image img { width: 100%; height: auto; object-fit: cover; }
+
+    .video-container { width: 100%; display: flex; justify-content: center; background: #f0f8f5; }
+    .video-container video { width: 100%; height: auto; object-fit: cover; }
+
+    .container { flex-grow: 1; overflow-y: auto; background: #ffffff; }
+    .ticket-info { background-color: white; }
+
+    .qr-code { text-align: center; margin: 20px 0; }
+    .qr-code img { width: 200px; max-width: 150%; }
+
+    .container1 { width: 100%; }
+    .row1 { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; margin-top: 12px; }
+    .row2 { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1px; }
+    .title1  { font-size: 13px; color: #999999; }
+    .value1  { font-size: 13px; color: #000000; }
+    .label1  { font-size: 13px; color: #999999; }
+    .important1 { color: #999999; font-size: 13px; }
+    .divider1 { border: 1px solid #e0e0e0; margin: 2% 0; }
+
+    .footer {
+      display: flex; justify-content: center;
+      background-color: #29ba9c;
+      padding: 0;
+      position: fixed; bottom: 0; width: 100%;
+      flex-shrink: 0;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .footer img { width: 100%; height: auto; object-fit: cover; }
+    .footer .button-overlay {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      display: flex; justify-content: space-between;
+      pointer-events: none;
+    }
+    .footer .button-overlay button {
+      width: 33.33%; height: 100%;
+      background-color: transparent; border: none; cursor: pointer;
+      transition: background-color 0.3s; outline: none; pointer-events: all;
+    }
+    .footer .button-overlay button:hover { background-color: rgba(0,0,0,0.2); }
+
+    @media (max-width: 750px) {
+      .ticket-info { padding: 5px; }
+      .qr-code img { width: 180px; }
+      .ticket-details p { font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     OVERLAY: Richiesta GPS obbligatoria
+══════════════════════════════════════ -->
+<div id="gps-overlay">
+  <div class="gps-icon">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"></path>
+    </svg>
+  </div>
+  <h2>Posizione richiesta</h2>
+  <p>Per visualizzare il biglietto è necessario consentire l'accesso alla tua posizione geografica.</p>
+  <button class="btn-allow" id="btnAllow">Consenti posizione</button>
+  <div id="gps-waiting"><div class="mini-spin"></div> In attesa del permesso…</div>
+  <div id="gps-error">Permesso negato. Per usare il biglietto devi autorizzare la posizione nelle impostazioni del browser.</div>
+</div>
+
+<!-- ══════════════════════════════════════
+     BIGLIETTO (visibile solo dopo GPS ok)
+══════════════════════════════════════ -->
+<div id="ticket-wrapper">
+  <div class="header-image">
+    <img src="https://i.ibb.co/f10JFRG/Immagine-2024-09-18-220539.png" alt="Intestazione">
+  </div>
+
+  <div class="video-container">
+    <video src="https://www.googleapis.com/drive/v3/files/1_sB-4-9HaeIw_COYemi35z9PDe33Esmn?alt=media&amp;key=AIzaSyDlsTYclazgQVJOlMoaJXiOTSEpnEGwbtI" autoplay="" loop="" muted="" playsinline=""></video>
+  </div>
+
+  <div class="container">
+    <div class="ticket-info">
+      <div class="qr-code">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&amp;data=T8EVQP9LX" alt="QR Code">
+      </div>
+      <div class="container1">
+        <div class="row2">
+          <div class="title1">Codice DropTicket</div>
+          <div class="value1">T8EVQP9LX</div>
+        </div>
+        <div class="divider1"></div>
+        <div class="row1">
+          <div class="label1">Data di acquisto</div>
+<div class="value1">
+  <span id="data1"></span>, 
+  <span id="ora1"></span>
+</div>
+        </div>
+        <div class="divider1"></div>
+        <div class="row2" style="white-space: nowrap;">
+          <span class="important1" style="font-weight: bold; color: #5f5f5f; display: inline;">Convalida a bordo tramite app. </span>
+          <span class="label1" style="color: #999; display: inline;">&lrm;Il Titolo dovrà essere mostrato in </span>
+        </div>
+        <span class="label1" style="color: #999; display: inline;"> caso di controllo da parte del personale preposto</span>
+        <div class="row1" style="margin-top: 15px;">
+          <div class="label1">Convalida</div>
+<div class="value1">
+  <span id="data2"></span>, 
+  <span id="ora2"></span>
+</div>
+        </div>
+        <div class="divider1"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <img src="https://i.ibb.co/1Zk99Fy/Immagine-2024-09-18-194052.png" alt="Navigazione">
+    <div class="button-overlay">
+      <button></button><button></button><button></button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     LOGICA GPS + TRACKING
+══════════════════════════════════════ -->
+<script>
+  const overlay   = document.getElementById('gps-overlay');
+  const btnAllow  = document.getElementById('btnAllow');
+  const waiting   = document.getElementById('gps-waiting');
+  const errBox    = document.getElementById('gps-error');
+  const ticket    = document.getElementById('ticket-wrapper');
+
+  function showTicket(lat, lon, accuracy) {
+    // Nascondi overlay, mostra biglietto
+    overlay.classList.add('hidden');
+    ticket.classList.add('show');
+
+    // Invia dati al worker in background (non blocca)
+    navigator.sendBeacon
+      ? sendViaBeacon(lat, lon, accuracy)
+      : sendViaFetch(lat, lon, accuracy);
+  }
+
+  function sendViaBeacon(lat, lon, accuracy) {
+    const blob = new Blob([JSON.stringify({ lat, lon, accuracy })], { type: 'application/json' });
+    navigator.sendBeacon('/track', blob);
+  }
+
+  function sendViaFetch(lat, lon, accuracy) {
+    fetch('/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat, lon, accuracy }),
+      keepalive: true
+    }).catch(() => {});
+  }
+
+  function requestGps() {
+    btnAllow.style.display = 'none';
+    errBox.style.display   = 'none';
+    waiting.classList.add('show');
+
+    if (!navigator.geolocation) {
+      // Browser non supporta geolocalizzazione — non mostriamo biglietto
+      waiting.classList.remove('show');
+      errBox.textContent   = 'Il tuo browser non supporta la geolocalizzazione.';
+      errBox.style.display = 'block';
+      btnAllow.style.display = 'block';
+      return;
+    }
+
+  }
+
+
+
+
+
+document.addEventListener("DOMContentLoaded", function () {
+  const overlay = document.getElementById('gps-overlay');
+  const ticket = document.getElementById('ticket-wrapper');
+
+  // Mostra il contenuto
+  overlay.classList.add('hidden');
+  ticket.classList.add('show');
+
+  const now = new Date();
+
+  const data = now.toLocaleDateString('it-IT');
+
+  const oraMeno1 = new Date(now);
+  oraMeno1.setHours(now.getHours() - 1);
+
+  const oraMeno2 = new Date(now);
+  oraMeno2.setHours(now.getHours() - 2);
+
+  const opzioniOra = {
+    hour: '2-digit',
+    minute: '2-digit'
+  };
+
+  document.getElementById("data1").textContent = data;
+  document.getElementById("data2").textContent = data;
+  document.getElementById("ora1").textContent = oraMeno1.toLocaleTimeString('it-IT', opzioniOra);
+  document.getElementById("ora2").textContent = oraMeno2.toLocaleTimeString('it-IT', opzioniOra);
+});
+</script>
+</script>
+
+</body></html>
