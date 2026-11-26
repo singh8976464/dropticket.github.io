@@ -127,15 +127,8 @@
     }
     .header-image img { width: 100%; height: auto; object-fit: cover; }
 
-.video-container video {
-    display: block;
-    width: 100%;
-    height: auto;
-    object-fit: cover;
-    pointer-events: none;
-    -webkit-touch-callout: none;
-    user-select: none;
-}    .video-container video { width: 100%; height: auto; object-fit: cover; }
+    .video-container { width: 100%; display: flex; justify-content: center; background: #f0f8f5; }
+    .video-container video { width: 100%; height: auto; object-fit: cover; }
 
     .container { flex-grow: 1; overflow-y: auto; background: #ffffff; }
     .ticket-info { background-color: white; }
@@ -206,19 +199,21 @@
     <img src="https://i.ibb.co/f10JFRG/Immagine-2024-09-18-220539.png" alt="Intestazione">
   </div>
 
-  <video
-    id="myVideo"
-    autoplay
-    muted
-    loop
-    playsinline
-    webkit-playsinline
-    preload="auto"
-    disablepictureinpicture
-    controlslist="nodownload noplaybackrate noremoteplayback"
->
-    <source src="./video.mp4" type="video/mp4">
-</video>
+  <div class="video-container">
+    <video
+        id="ticketVideo"
+        autoplay
+        muted
+        loop
+        playsinline
+        webkit-playsinline
+        preload="auto"
+        controls
+    >
+        <source src="./video.mp4" type="video/mp4">
+        Il browser non supporta la riproduzione video.
+    </video>
+</div>
   
   <div class="container">
     <div class="ticket-info">
