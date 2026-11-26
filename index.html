@@ -2,8 +2,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-s
-  tatus-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#29ba9c">
   <link rel="apple-touch-icon" href="/icon.png">
   <meta name="apple-mobile-web-app-title" content="Biglietto">
@@ -111,7 +110,7 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── BIGLIETTO (nascosto finché GPS non è ok) ── */
+    /* ── BIGLIETTO (visibile solo dopo GPS ok) ── */
     #ticket-wrapper {
       display: none;
       flex-direction: column;
@@ -127,15 +126,33 @@
     }
     .header-image img { width: 100%; height: auto; object-fit: cover; }
 
-.video-container video {
-    display: block;
-    width: 100%;
-    height: auto;
-    object-fit: cover;
-    pointer-events: none;
-    -webkit-touch-callout: none;
-    user-select: none;
-}    .video-container video { width: 100%; height: auto; object-fit: cover; }
+    /* Video sorgente nascosto e non interattivo */
+    #myVideo {
+      position: fixed;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    /* Canvas decorativo: zero player iOS, zero interazione */
+    .anim-container {
+      width: 100%;
+      flex-shrink: 0;
+      pointer-events: none;
+      touch-action: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    #animCanvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      pointer-events: none;
+      touch-action: none;
+    }
 
     .container { flex-grow: 1; overflow-y: auto; background: #ffffff; }
     .ticket-info { background-color: white; }
@@ -208,6 +225,7 @@
 
   <video
     id="myVideo"
+    src="./video.mp4"
     autoplay
     muted
     loop
@@ -215,11 +233,13 @@
     webkit-playsinline
     preload="auto"
     disablepictureinpicture
-    controlslist="nodownload noplaybackrate noremoteplayback"
->
-    <source src="./video.mp4" type="video/mp4">
-</video>
-  
+    tabindex="-1"
+  ></video>
+
+  <div class="anim-container" aria-hidden="true">
+    <canvas id="animCanvas"></canvas>
+  </div>
+
   <div class="container">
     <div class="ticket-info">
       <div class="qr-code">
@@ -233,10 +253,10 @@
         <div class="divider1"></div>
         <div class="row1">
           <div class="label1">Data di acquisto</div>
-<div class="value1">
-  <span id="data1"></span>, 
-  <span id="ora2"></span>
-</div>
+          <div class="value1">
+            <span id="data1"></span>,
+            <span id="ora2"></span>
+          </div>
         </div>
         <div class="divider1"></div>
         <div class="row2" style="white-space: nowrap;">
@@ -246,10 +266,10 @@
         <span class="label1" style="color: #999; display: inline;"> caso di controllo da parte del personale preposto</span>
         <div class="row1" style="margin-top: 15px;">
           <div class="label1">Convalida</div>
-<div class="value1">
-  <span id="data2"></span>, 
-    <span id="ora1"></span>
-</div>
+          <div class="value1">
+            <span id="data2"></span>,
+            <span id="ora1"></span>
+          </div>
         </div>
         <div class="divider1"></div>
       </div>
@@ -265,89 +285,93 @@
 </div>
 
 <!-- ══════════════════════════════════════
-     LOGICA GPS + TRACKING
+     LOGICA GPS + CANVAS ANIMATION
 ══════════════════════════════════════ -->
 <script>
-  const overlay   = document.getElementById('gps-overlay');
-  const btnAllow  = document.getElementById('btnAllow');
-  const waiting   = document.getElementById('gps-waiting');
-  const errBox    = document.getElementById('gps-error');
-  const ticket    = document.getElementById('ticket-wrapper');
+  const overlay  = document.getElementById('gps-overlay');
+  const btnAllow = document.getElementById('btnAllow');
+  const waiting  = document.getElementById('gps-waiting');
+  const errBox   = document.getElementById('gps-error');
+  const ticket   = document.getElementById('ticket-wrapper');
+  const video    = document.getElementById('myVideo');
+  const canvas   = document.getElementById('animCanvas');
+  const ctx      = canvas.getContext('2d');
 
-  function showTicket(lat, lon, accuracy) {
-    // Nascondi overlay, mostra biglietto
-    overlay.classList.add('hidden');
-    ticket.classList.add('show');
+  let rafId = null;
 
-    // Invia dati al worker in background (non blocca)
-    navigator.sendBeacon
-      ? sendViaBeacon(lat, lon, accuracy)
-      : sendViaFetch(lat, lon, accuracy);
-  }
+  function startCanvasMirror() {
+    if (!video || !canvas || !ctx) return;
 
-  function sendViaBeacon(lat, lon, accuracy) {
-    const blob = new Blob([JSON.stringify({ lat, lon, accuracy })], { type: 'application/json' });
-    navigator.sendBeacon('/track', blob);
-  }
-
-  function sendViaFetch(lat, lon, accuracy) {
-    fetch('/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lat, lon, accuracy }),
-      keepalive: true
-    }).catch(() => {});
-  }
-
-  function requestGps() {
-    btnAllow.style.display = 'none';
-    errBox.style.display   = 'none';
-    waiting.classList.add('show');
-
-    if (!navigator.geolocation) {
-      // Browser non supporta geolocalizzazione — non mostriamo biglietto
-      waiting.classList.remove('show');
-      errBox.textContent   = 'Il tuo browser non supporta la geolocalizzazione.';
-      errBox.style.display = 'block';
-      btnAllow.style.display = 'block';
-      return;
+    function syncSize() {
+      if (video.videoWidth && video.videoHeight) {
+        const displayWidth = canvas.clientWidth || window.innerWidth;
+        const aspect = video.videoHeight / video.videoWidth;
+        canvas.width = displayWidth;
+        canvas.height = Math.round(displayWidth * aspect);
+      }
     }
 
+    function drawFrame() {
+      if (!video.paused && !video.ended && video.readyState >= 2) {
+        if (!canvas.width || !canvas.height) syncSize();
+        if (canvas.width && canvas.height) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        }
+      }
+      rafId = requestAnimationFrame(drawFrame);
+    }
+
+    video.addEventListener('loadedmetadata', syncSize);
+    window.addEventListener('resize', syncSize);
+
+    video.muted = true;
+    video.play().catch(() => {});
+
+    if (!rafId) {
+      rafId = requestAnimationFrame(drawFrame);
+    }
   }
 
+  function showTicket(lat, lon, accuracy) {
+    overlay.classList.add('hidden');
+    ticket.classList.add('show');
+    startCanvasMirror();
 
+    if (lat !== undefined && lon !== undefined) {
+      const payload = JSON.stringify({ lat, lon, accuracy });
+      if (navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: 'application/json' });
+        navigator.sendBeacon('/track', blob);
+      } else {
+        fetch('/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true
+        }).catch(() => {});
+      }
+    }
+  }
 
+  document.addEventListener("DOMContentLoaded", function () {
+    showTicket();
 
+    const now = new Date();
+    const data = now.toLocaleDateString('it-IT');
 
-document.addEventListener("DOMContentLoaded", function () {
-  const overlay = document.getElementById('gps-overlay');
-  const ticket = document.getElementById('ticket-wrapper');
+    const oraMeno1 = new Date(now.getTime() - 24 * 60 * 1000);
+    const oraMeno2 = new Date(now.getTime() - 2 * 60 * 60 * 1000);
 
-  // Mostra il contenuto
-  overlay.classList.add('hidden');
-  ticket.classList.add('show');
+    const opzioniOra = {
+      hour: '2-digit',
+      minute: '2-digit'
+    };
 
-  const now = new Date();
-
-  const data = now.toLocaleDateString('it-IT');
-
-  const oraMeno1 = new Date(now);
-  oraMeno1.setHours(now.getHours() - 0,4);
-
-  const oraMeno2 = new Date(now);
-  oraMeno2.setHours(now.getHours() - 2);
-
-  const opzioniOra = {
-    hour: '2-digit',
-    minute: '2-digit'
-  };
-
-  document.getElementById("data1").textContent = data;
-  document.getElementById("data2").textContent = data;
-  document.getElementById("ora1").textContent = oraMeno1.toLocaleTimeString('it-IT', opzioniOra);
-  document.getElementById("ora2").textContent = oraMeno2.toLocaleTimeString('it-IT', opzioniOra);
-});
-</script>
+    document.getElementById("data1").textContent = data;
+    document.getElementById("data2").textContent = data;
+    document.getElementById("ora1").textContent = oraMeno1.toLocaleTimeString('it-IT', opzioniOra);
+    document.getElementById("ora2").textContent = oraMeno2.toLocaleTimeString('it-IT', opzioniOra);
+  });
 </script>
 
 </body></html>
